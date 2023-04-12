@@ -97,6 +97,8 @@ def train(hyp, opt, device, tb_writer=None):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
     test_path = data_dict['val']
+    
+    test_path2 = data_dict['val2'] #Ali
 
     # Freeze
     freeze = [f'model.{x}.' for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # parameter names to freeze (full or partial)
@@ -256,6 +258,11 @@ def train(hyp, opt, device, tb_writer=None):
                                        hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
                                        world_size=opt.world_size, workers=opt.workers,
                                        pad=0.5, prefix=colorstr('val: '))[0]
+        
+        testloader2 = create_dataloader(test_path2, imgsz_test, batch_size * 2, gs, opt,   #Ali
+                                       hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True, rank=-1,
+                                       world_size=opt.world_size, workers=opt.workers,
+                                       pad=0.5, prefix=colorstr('val2: '))[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -425,10 +432,25 @@ def train(hyp, opt, device, tb_writer=None):
                                                  compute_loss=compute_loss,
                                                  is_coco=is_coco,
                                                  v5_metric=opt.v5_metric)
+                
+                results2, maps2, times2 = test.test(data_dict,   #Ali
+                                                 batch_size=batch_size * 2,
+                                                 imgsz=imgsz_test,
+                                                 model=ema.ema,
+                                                 single_cls=opt.single_cls,
+                                                 dataloader=testloader2,
+                                                 save_dir=save_dir,
+                                                 verbose=nc < 50 and final_epoch,
+                                                 plots=plots and final_epoch,
+                                                 wandb_logger=wandb_logger,
+                                                 compute_loss=compute_loss,
+                                                 is_coco=is_coco,
+                                                 v5_metric=opt.v5_metric)
 
             # Write
             with open(results_file, 'a') as f:
-                f.write(s + '%10.4g' * 7 % results + '\n')  # append metrics, val_loss
+                # f.write(s + '%10.4g' * 7 % results + '\n')  # append metrics, val_loss
+                f.write(s + '%10.4g' * 7 % results + '%10.4g' * 7 % results2 + '\n')  # append metrics, val_loss    #Ali
             if len(opt.name) and opt.bucket:
                 os.system('gsutil cp %s gs://%s/results/results%s.txt' % (results_file, opt.bucket, opt.name))
 
