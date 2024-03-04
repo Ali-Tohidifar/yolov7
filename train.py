@@ -25,7 +25,8 @@ import test  # import test.py to get mAP after each epoch
 from models.experimental import attempt_load
 from models.yolo import Model
 from utils.autoanchor import check_anchors
-from utils.datasets import create_dataloader
+from utils.datasets import create_dataloader 
+#TODO: Custom Dataset Class: Implement a custom dataset class that supports adding new data, similar to your previous example. Ensure that this class is compatible with the data format and preprocessing steps used in YOLOv7.
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     check_requirements, print_mutation, set_logging, one_cycle, colorstr
@@ -37,8 +38,8 @@ from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
 
 logger = logging.getLogger(__name__)
 
-
-def train(hyp, opt, device, tb_writer=None):
+#TODO: Modifying the Training Loop: Introduce a mechanism to trigger the addition of new data. This could be based on certain conditions like after a specific number of epochs. When new data is to be added, update the dataset and recreate the DataLoader.
+def train(hyp, opt, device, tb_writer=None): 
     logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
     save_dir, epochs, batch_size, total_batch_size, weights, rank, freeze = \
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank, opt.freeze
@@ -271,7 +272,7 @@ def train(hyp, opt, device, tb_writer=None):
             if not opt.noautoanchor:
                 check_anchors(dataset, model=model, thr=hyp['anchor_t'], imgsz=imgsz)
             model.half().float()  # pre-reduce anchor precision
-
+    # TODO: Handling Distributed Training:Ensure that new data addition is properly synchronized across all distributed processes.
     # DDP mode
     if cuda and rank != -1:
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
