@@ -606,7 +606,7 @@ def box_diou(box1, box2, eps: float = 1e-7):
 
 
 def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
-                        labels=()):
+                        labels=(), return_probs=False):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
@@ -627,6 +627,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
     t = time.time()
     output = [torch.zeros((0, 6), device=prediction.device)] * prediction.shape[0]
+    probs = [torch.zeros((0, nc), device=prediction.device)] * prediction.shape[0]  # Initialize probability storage
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
@@ -644,6 +645,9 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         # If none remain process next image
         if not x.shape[0]:
             continue
+        # import ipdb;ipdb.set_trace()
+        # Copy original probabilities
+        probs_0 = x[:, 5:].clone().detach()
 
         # Compute conf
         if nc == 1:
@@ -677,7 +681,12 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             continue
         elif n > max_nms:  # excess boxes
             x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence
+            si = x[:, 4].argsort(descending=True)[:max_nms]
+        else:
+            si = x[:, 4].argsort(descending=True)
 
+        probs_0 = probs_0[si]
+        
         # Batched NMS
         c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
         boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
@@ -693,11 +702,28 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
+        probs[xi] = probs_0[i].cpu().numpy()  # Store class probabilities for selected boxes
+
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
             break  # time limit exceeded
-
+    if return_probs:
+        return output, probs
+    
     return output
+
+
+def calculate_uncertainty(prob):
+    sds = []
+    for p_bbox in prob:
+        mean = 0
+        var = 0
+        for i in range(len(p_bbox)):
+            mean += (i * p_bbox[i])
+        for i in range(len(p_bbox)):
+            var += ((i - mean) * (i - mean)) * p_bbox[i]
+        sds.append(np.sqrt(var))
+    return sds
 
 
 def non_max_suppression_kpt(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,

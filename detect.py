@@ -9,7 +9,7 @@ from numpy import random
 
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
-from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
+from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, calculate_uncertainty, apply_classifier, \
     scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized, TracedModel
@@ -67,6 +67,8 @@ def detect(save_img=False):
     old_img_b = 1
 
     t0 = time.time()
+
+    uncertainty = {}
     for path, img, im0s, vid_cap in dataset:
         img = torch.from_numpy(img).to(device)
         img = img.half() if half else img.float()  # uint8 to fp16/32
@@ -89,7 +91,9 @@ def detect(save_img=False):
         t2 = time_synchronized()
 
         # Apply NMS
-        pred = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms)
+        pred, probs = non_max_suppression(pred, opt.conf_thres, opt.iou_thres, classes=opt.classes, agnostic=opt.agnostic_nms, return_probs=True)
+        # import ipdb; ipdb.set_trace()
+        ucs = calculate_uncertainty(probs[0])  # uncertainties
         t3 = time_synchronized()
 
         # Apply Classifier
@@ -156,10 +160,11 @@ def detect(save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
+        if len(det): uncertainty[path] = ucs[0]
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
         #print(f"Results saved to {save_dir}{s}")
-
+    import ipdb;ipdb.set_trace()
     print(f'Done. ({time.time() - t0:.3f}s)')
 
 
