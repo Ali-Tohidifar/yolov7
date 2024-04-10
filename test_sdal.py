@@ -16,6 +16,16 @@ from utils.general import coco80_to_coco91_class, check_dataset, check_file, che
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
+from utils.loss import ComputeLoss
+
+
+class ArgParse:
+    def __init__(self, task, single_cls, device):
+        self.single_cls = single_cls
+        self.device = device
+        self.task = task
+
+opt = ArgParse(task= 'test', single_cls=True, device='CPU')
 
 
 def test(data,
@@ -36,9 +46,9 @@ def test(data,
          save_conf=False,  # save auto-label confidences
          plots=True,
          wandb_logger=None,
-         compute_loss=None,
+        #  compute_loss=None,
          half_precision=True,
-         trace=False,
+         trace=True,
          is_coco=False,
          v5_metric=False):
     # Initialize/load model and set device
@@ -48,10 +58,16 @@ def test(data,
 
     else:  # called directly
         set_logging()
-        device = select_device(opt.device, batch_size=batch_size)
+        try:
+            device = select_device(opt.device, batch_size=batch_size)
+        except:
+            device = select_device('CPU', batch_size=batch_size)
 
         # Directories
-        save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
+        project = './yolov7/runs/test'
+        name = 'exp'
+        exist_ok = False
+        save_dir = Path(increment_path(Path(project) / name, exist_ok=exist_ok))  # increment run
         (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
         # Load model
@@ -78,6 +94,9 @@ def test(data,
     iouv = torch.linspace(0.5, 0.95, 10).to(device)  # iou vector for mAP@0.5:0.95
     niou = iouv.numel()
 
+    # loss function
+    compute_loss = ComputeLoss(model)
+
     # Logging
     log_imgs = 0
     if wandb_logger and wandb_logger.wandb:
@@ -93,6 +112,8 @@ def test(data,
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")
     
+    # Add a list to store the loss and path info
+    image_losses_dict = {}
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
@@ -115,8 +136,12 @@ def test(data,
             t0 += time_synchronized() - t
 
             # Compute loss
-            if compute_loss:
-                loss += compute_loss([x.float() for x in train_out], targets)[1][:3]  # box, obj, cls
+            # if compute_loss:
+            loss_batch = compute_loss([x.float() for x in train_out], targets)
+            loss += loss_batch[1][:3]  # box, obj, cls
+
+            if len(paths) == 1:
+                image_losses_dict[Path(paths[0]).stem] = loss_batch[1][3]
 
             # Run NMS
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
@@ -284,7 +309,7 @@ def test(data,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t, image_losses_dict
 
 
 if __name__ == '__main__':
