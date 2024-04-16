@@ -20,12 +20,14 @@ from utils.loss import ComputeLoss
 
 
 class ArgParse:
-    def __init__(self, task, single_cls, device):
+    def __init__(self, single_cls):
+    # def __init__(self, task, single_cls, device):
         self.single_cls = single_cls
-        self.device = device
-        self.task = task
+        # self.device = device
+        # self.task = task
 
-opt = ArgParse(task= 'test', single_cls=True, device='CPU')
+opt = ArgParse(single_cls=True)
+# opt = ArgParse(task= 'test', single_cls=True, device='CPU')
 
 
 def test(data,
@@ -35,7 +37,7 @@ def test(data,
          conf_thres=0.001,
          iou_thres=0.6,  # for NMS
          save_json=False,
-         single_cls=False,
+         single_cls=True,
          augment=False,
          verbose=False,
          model=None,
@@ -50,33 +52,31 @@ def test(data,
          half_precision=True,
          trace=True,
          is_coco=False,
-         v5_metric=False):
+         v5_metric=False,
+         training=True,
+         device='cpu',
+         task='test'):
     # Initialize/load model and set device
-    training = model is not None
-    if training:  # called by train.py
-        device = next(model.parameters()).device  # get model device
+    set_logging()
+    try:
+        device = select_device(device, batch_size=batch_size)
+    except:
+        device = select_device('CPU', batch_size=batch_size)
 
-    else:  # called directly
-        set_logging()
-        try:
-            device = select_device(opt.device, batch_size=batch_size)
-        except:
-            device = select_device('CPU', batch_size=batch_size)
+    # Directories
+    project = './yolov7/runs/test'
+    name = 'exp'
+    exist_ok = False
+    save_dir = Path(increment_path(Path(project) / name, exist_ok=exist_ok))  # increment run
+    (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
 
-        # Directories
-        project = './yolov7/runs/test'
-        name = 'exp'
-        exist_ok = False
-        save_dir = Path(increment_path(Path(project) / name, exist_ok=exist_ok))  # increment run
-        (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
-
-        # Load model
-        model = attempt_load(weights, map_location=device)  # load FP32 model
-        gs = max(int(model.stride.max()), 32)  # grid size (max stride)
-        imgsz = check_img_size(imgsz, s=gs)  # check img_size
-        
-        if trace:
-            model = TracedModel(model, device, imgsz)
+    # Load model
+    model = attempt_load(weights, map_location=device)  # load FP32 model
+    gs = max(int(model.stride.max()), 32)  # grid size (max stride)
+    imgsz = check_img_size(imgsz, s=gs)  # check img_size
+    
+    if trace:
+        model = TracedModel(model, device, imgsz)
 
     # Half
     half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
@@ -102,12 +102,11 @@ def test(data,
     if wandb_logger and wandb_logger.wandb:
         log_imgs = min(wandb_logger.log_imgs, 100)
     # Dataloader
-    if not training:
-        if device.type != 'cpu':
-            model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
-        task = opt.task if opt.task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
-        dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
-                                       prefix=colorstr(f'{task}: '))[0]
+    if device.type != 'cpu':
+        model(torch.zeros(1, 3, imgsz, imgsz).to(device).type_as(next(model.parameters())))  # run once
+    task = task if task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
+    dataloader = create_dataloader(data[task], imgsz, batch_size, gs, opt, pad=0.5, rect=True,
+                                    prefix=colorstr(f'{task}: '))[0]
 
     if v5_metric:
         print("Testing with YOLOv5 AP metric...")

@@ -627,7 +627,8 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
     t = time.time()
     output = [torch.zeros((0, 6), device=prediction.device)] * prediction.shape[0]
-    probs = [torch.zeros((0, nc), device=prediction.device)] * prediction.shape[0]  # Initialize probability storage
+    if return_probs:
+        probs = [torch.zeros((0, nc), device=prediction.device)] * prediction.shape[0]  # Initialize probability storage
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
@@ -647,7 +648,8 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
             continue
         # import ipdb;ipdb.set_trace()
         # Copy original probabilities
-        probs_0 = x[:, 5:].clone().detach()
+        if return_probs:
+            probs_0 = x[:, 5:].clone().detach()
 
         # Compute conf
         if nc == 1:
@@ -685,7 +687,8 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         else:
             si = x[:, 4].argsort(descending=True)
 
-        probs_0 = probs_0[si]
+        if return_probs:
+            probs_0 = probs_0[si]
         
         # Batched NMS
         c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
@@ -702,7 +705,8 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
-        probs[xi] = probs_0[i].cpu().numpy()  # Store class probabilities for selected boxes
+        if return_probs:
+            probs65t[xi] = probs_0[i].cpu().numpy()  # Store class probabilities for selected boxes
 
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
