@@ -54,7 +54,7 @@ def test(data,
          is_coco=False,
          v5_metric=False,
          training=True,
-         device='cpu',
+         device='cuda',
          task='test'):
     # Initialize/load model and set device
     set_logging()
