@@ -308,7 +308,7 @@ def test(data,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t, image_losses_dict
+    return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict
 
 
 if __name__ == '__main__':
