@@ -98,6 +98,7 @@ def train(hyp, opt, device, tb_writer=None):
     with torch_distributed_zero_first(rank):
         check_dataset(data_dict)  # check
     train_path = data_dict['train']
+    synth_path = data_dict['synth']
     test_path = data_dict['val']
 
     # Freeze
@@ -244,6 +245,12 @@ def train(hyp, opt, device, tb_writer=None):
         logger.info('Using SyncBatchNorm()')
 
     # Trainloader
+    # Initialize ratios for real and synthetic data
+    real_ratio = 1.0  # Start with 100% real data
+    synthetic_ratio = 0.0  # Start with 0% synthetic data
+
+    # Number of epochs for transitioning from real to synthetic and back
+    transition_epochs = 50  # HYPERPARAM
     dataloader, dataset = create_dataloader(train_path, imgsz, batch_size, gs, opt,
                                             hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                             world_size=opt.world_size, workers=opt.workers,

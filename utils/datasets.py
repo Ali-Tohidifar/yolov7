@@ -62,6 +62,45 @@ def exif_size(img):
     return s
 
 
+def create_mixed_dataloader(real_path, synthetic_path, real_ratio, synthetic_ratio, imgsz, batch_size, stride, opt, hyp=None, 
+                            augment=False, cache=False, pad=0.0, rect=False, rank=-1, world_size=1, workers=8, 
+                            image_weights=False, quad=False, prefix=''):
+    
+    with torch_distributed_zero_first(rank):
+        real_dataset = LoadImagesAndLabels(real_path, imgsz, batch_size, augment=augment, hyp=hyp, rect=rect,
+                                           cache_images=cache, single_cls=opt.single_cls, stride=int(stride),
+                                           pad=pad, image_weights=image_weights, prefix=prefix)
+
+        synthetic_dataset = LoadImagesAndLabels(synthetic_path, imgsz, batch_size, augment=augment, hyp=hyp, rect=rect,
+                                                cache_images=cache, single_cls=opt.single_cls, stride=int(stride),
+                                                pad=pad, image_weights=image_weights, prefix=prefix)
+
+    # Determine the sizes based on the given ratios
+    real_size = int(real_ratio * len(real_dataset))
+    synthetic_size = int(synthetic_ratio * len(synthetic_dataset))
+
+    # Combine the datasets
+    real_indices = list(range(len(real_dataset)))
+    random.shuffle(real_indices)
+    real_indices = real_indices[:real_size]
+    
+    synthetic_indices = list(range(len(synthetic_dataset)))
+    random.shuffle(synthetic_indices)
+    synthetic_indices = synthetic_indices[:synthetic_size]
+
+    # Create a mixed dataset by concatenating subsets of real and synthetic datasets
+    mixed_dataset = torch.utils.data.Subset(real_dataset, real_indices) + torch.utils.data.Subset(synthetic_dataset, synthetic_indices)
+    
+    batch_size = min(batch_size, len(mixed_dataset))
+    nw = min([os.cpu_count() // world_size, batch_size if batch_size > 1 else 0, workers])
+    sampler = torch.utils.data.distributed.DistributedSampler(mixed_dataset) if rank != -1 else None
+    loader = torch.utils.data.DataLoader if image_weights else InfiniteDataLoader
+
+    dataloader = loader(mixed_dataset, batch_size=batch_size, num_workers=nw, sampler=sampler, pin_memory=True,
+                        collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn)
+    return dataloader, mixed_dataset
+
+
 def create_dataloader(path, imgsz, batch_size, stride, opt, hyp=None, augment=False, cache=False, pad=0.0, rect=False,
                       rank=-1, world_size=1, workers=8, image_weights=False, quad=False, prefix=''):
     # Make sure only the first process in DDP process the dataset first, and the following others can use the cache
@@ -397,6 +436,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop('results')  # found, missing, empty, corrupted, total
+        logging.info(f"{prefix}Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted")
         if exists:
             d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
             tqdm(None, desc=prefix + d, total=n, initial=n)  # display cache results

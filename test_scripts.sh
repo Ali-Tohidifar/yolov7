@@ -1,0 +1,3 @@
+# python yolov7/train.py --img-size {int(hyp['image_size'])} --batch 40 --epochs {hyp['synth_epcohs']} --data {paths['synth_data_yaml']} --weights {weights} --single-cls --project {PROJECT_DIR} --name {yolo_synth_name} --device {hyp['device']} {synth_resume_flag}
+# combine real and cycle1 synthetic data of sdal
+python yolov7/train.py --data data_cfg/tests/combine_real5k_cycle1_synth.yaml --weights warmed_up_models/Real_5K_416/weights/last.pt --batch-size 64 --img-size 416 --epochs 250 --device 0 --single-cls --project yolov7/runs/train --name combine_real5k_cycle1_synth
