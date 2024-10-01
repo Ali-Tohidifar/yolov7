@@ -706,7 +706,7 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
         output[xi] = x[i]
         if return_probs:
-            probs65t[xi] = probs_0[i].cpu().numpy()  # Store class probabilities for selected boxes
+            probs[xi] = probs_0[i].cpu().numpy()  # Store class probabilities for selected boxes
 
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')

@@ -160,6 +160,30 @@ def detect(save_img=False):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
+        # feature extraction
+        # ---------------------------------------------------------
+        def make_hook(key):
+            def hook(model, input, output):
+                intermediate_output[key] = output.detach()
+            return hook
+
+        layer_nums = [74, 75, 76] # Intermediate layer number
+        intermediate_output = {}
+        for layer_num in layer_nums:
+            model.model[layer_num].register_forward_hook(make_hook(layer_num))
+
+            model(img)
+            # feature extraction
+            feature_maps = intermediate_output[layer_num]
+
+            # save feature map
+            import numpy as np
+            if not Path(f'{opt.features_dir}/features_{opt.features_name}').exists():
+                Path(f'{opt.features_dir}/features_{opt.features_name}').mkdir(parents=True, exist_ok=True)
+            with open(f'{opt.features_dir}/features_{opt.features_name}/feature_map_{Path(path).stem}_layer{layer_num}.npy', 'wb') as f:
+                np.save(f, feature_maps.cpu().numpy())
+        # ---------------------------------------------------------
+
         if len(det): uncertainty[path] = ucs[0]
     if save_txt or save_img:
         s = f"\n{len(list(save_dir.glob('labels/*.txt')))} labels saved to {save_dir / 'labels'}" if save_txt else ''
@@ -187,6 +211,8 @@ if __name__ == '__main__':
     parser.add_argument('--name', default='exp', help='save results to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
     parser.add_argument('--no-trace', action='store_true', help='don`t trace model')
+    parser.add_argument('--features-dir', type=str, help='directory to save feature maps')
+    parser.add_argument('--features-name', type=str, help='name of the feature maps')
     opt = parser.parse_args()
     print(opt)
     #check_requirements(exclude=('pycocotools', 'thop'))
