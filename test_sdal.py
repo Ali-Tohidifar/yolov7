@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, calculate_uncertainty
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized, TracedModel
@@ -29,6 +29,18 @@ class ArgParse:
 opt = ArgParse(single_cls=True)
 # opt = ArgParse(task= 'test', single_cls=True, device='CPU')
 
+# def calculate_uncertainty(prob):
+#     import ipdb;ipdb.set_trace()
+#     sds = []
+#     for p_bbox in prob:
+#         mean = 0
+#         var = 0
+#         for i in range(len(p_bbox)):
+#             mean += (i * p_bbox[i])
+#         for i in range(len(p_bbox)):
+#             var += ((i - mean) * (i - mean)) * p_bbox[i]
+#         sds.append(np.sqrt(var))
+#     return sds
 
 def test(data,
          weights=None,
@@ -55,7 +67,8 @@ def test(data,
          v5_metric=False,
          training=True,
          device='cuda',
-         task='test'):
+         task='test',
+         confidence_based=False):
     # Initialize/load model and set device
     set_logging()
     try:
@@ -146,7 +159,12 @@ def test(data,
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
-            out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
+            if confidence_based:
+                out, probs = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, return_probs=True)
+                uncertainty = calculate_uncertainty(probs)
+                import ipdb;ipdb.set_trace()
+            else:
+                out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
             t1 += time_synchronized() - t
 
         # Statistics per image
@@ -308,7 +326,10 @@ def test(data,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict
+    if confidence_based:
+        return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict, uncertainty
+    else:
+        return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict
 
 
 if __name__ == '__main__':

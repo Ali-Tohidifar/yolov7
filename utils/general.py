@@ -717,18 +717,46 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
     return output
 
 
-def calculate_uncertainty(prob):
+# def calculate_uncertainty(probs):
+#     import ipdb;ipdb.set_trace()
+#     sds = []
+#     for p_bbox in probs:
+#         mean = 0
+#         var = 0
+#         for i in range(len(p_bbox)):
+#             mean += (i * p_bbox[i])
+#         for i in range(len(p_bbox)):
+#             var += ((i - mean) * (i - mean)) * p_bbox[i]
+#         sds.append(np.sqrt(var))
+#     return sds
+def calculate_uncertainty(probs):
+    """
+    Calculate uncertainty based on anchor box objectness scores
+    Args:
+        probs: List of tensors with shape (num_anchors, 1) containing objectness scores
+    Returns:
+        List of uncertainty scores for each detection
+    """
     sds = []
-    for p_bbox in prob:
-        mean = 0
-        var = 0
-        for i in range(len(p_bbox)):
-            mean += (i * p_bbox[i])
-        for i in range(len(p_bbox)):
-            var += ((i - mean) * (i - mean)) * p_bbox[i]
-        sds.append(np.sqrt(var))
+    for p_bbox in probs:
+        # Convert to numpy if it's a tensor
+        if torch.is_tensor(p_bbox):
+            p_bbox = p_bbox.cpu().numpy()
+        
+        # Flatten the (179,1) tensor to (179,)
+        p_bbox = p_bbox.flatten()
+        
+        # Calculate mean of objectness scores
+        mean = np.mean(p_bbox)
+        
+        # Calculate variance of objectness scores
+        var = np.sum((p_bbox - mean) ** 2) / len(p_bbox)
+        
+        # Standard deviation as uncertainty measure
+        sd = np.sqrt(var)
+        sds.append(sd)
+    import ipdb;ipdb.set_trace()
     return sds
-
 
 def non_max_suppression_kpt(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
                         labels=(), kpt_label=False, nc=None, nkpt=None):
