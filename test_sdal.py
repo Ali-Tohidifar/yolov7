@@ -126,6 +126,7 @@ def test(data,
     
     # Add a list to store the loss and path info
     image_losses_dict = {}
+    uncertaintiy_dict = {}
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
@@ -162,7 +163,10 @@ def test(data,
             if confidence_based:
                 out, probs = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True, return_probs=True)
                 uncertainty = calculate_uncertainty(probs)
-                import ipdb;ipdb.set_trace()
+                if len(paths) == 1 and uncertainty is not None:
+                    uncertaintiy_dict[Path(paths[0]).stem] = uncertainty
+                else:
+                    raise ValueError("uncertainty is None or multiple images are passed which is not supported")
             else:
                 out = non_max_suppression(out, conf_thres=conf_thres, iou_thres=iou_thres, labels=lb, multi_label=True)
             t1 += time_synchronized() - t
@@ -327,7 +331,7 @@ def test(data,
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
     if confidence_based:
-        return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict, uncertainty
+        return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict, uncertaintiy_dict
     else:
         return mp, mr, map50, map, [*(loss.cpu() / len(dataloader)).tolist()], maps, t, image_losses_dict
 

@@ -647,9 +647,6 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
         if not x.shape[0]:
             continue
         # import ipdb;ipdb.set_trace()
-        # Copy original probabilities
-        if return_probs:
-            probs_0 = x[:, 5:].clone().detach()
 
         # Compute conf
         if nc == 1:
@@ -657,6 +654,10 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
                                  # so there is no need to multiplicate.
         else:
             x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+
+        # Copy original probabilities
+        if return_probs:
+            probs_0 = x[:, 5:].clone().detach()
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
@@ -755,7 +756,6 @@ def calculate_uncertainty(probs):
         # Standard deviation as uncertainty measure
         sd = np.sqrt(var)
         sds.append(sd)
-    import ipdb;ipdb.set_trace()
     return sds
 
 def non_max_suppression_kpt(prediction, conf_thres=0.25, iou_thres=0.45, classes=None, agnostic=False, multi_label=False,
